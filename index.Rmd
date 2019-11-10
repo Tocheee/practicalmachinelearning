@@ -1,0 +1,199 @@
+---
+title: "Practical Machine Learning Prediction Exercise"
+author: "@tocheee.github.io"
+date: "November 9, 2019"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(warning = FALSE,message=FALSE)
+```
+
+
+
+```{r, echo = FALSE, results=FALSE, warning=FALSE,message=FALSE}
+#Import necessary libraries
+#For data manipulation
+library(tidyverse) 
+#For modelling pre-processing
+library(caret)
+#For plotting
+library(ggplot2)
+#For date manipulation
+library(lubridate)
+#For decision trees
+library(tree)
+#For classification trees
+library(rpart)
+```
+
+
+Read in the datasets
+```{r}
+#The training set will be split into furtherparts for modelling
+train_set <- read_csv("pml-training.csv",col_types = cols(.default="n",classe = "f", cvtd_timestamp = "?", user_name = "f", new_window = "f"))
+
+#Leaving the test set provided as a validation set for the end of the modelling
+
+#Drop the X1 variable
+train_set <- train_set %>% 
+  select(-X1)
+
+#removing all NA columns
+#We have enough data so we can omit these columns
+
+#Create a dataframe that identifies na values with TRUE/FALSE
+na_check_train <- data.frame(apply(train_set, 2, is.na))
+
+#Select only the columns that have no na values
+na_check_train <- na_check_train %>% 
+  select_if(function(col) sum(col) == 0)
+
+#Use the column names from na_check_train to select columns without na values
+train_set <- train_set %>%
+  select(colnames(na_check_train))
+
+write.csv(train_set,"train_set.csv")
+```
+
+```{r}
+#Cross - Validation
+#Split the train data into 2 parts using caret to train different models without overfitting
+train_set <- read.csv("train_set.csv")
+
+train_splits <- createDataPartition(train_set$classe,2,p=.8)
+
+train_1 <- train_set[train_splits$Resample1,]
+
+test_1 <- train_set[-train_splits$Resample1,]
+
+train_2 <- train_set[train_splits$Resample2,]
+
+test_2 <- train_set[-train_splits$Resample2,]
+
+write.csv(train_1,"train_1.csv",row.names=FALSE)
+write.csv(train_2,"train_2.csv",row.names = FALSE)
+write.csv(test_1,"test_1.csv",row.names=FALSE)
+write.csv(test_2,"test_2.csv",row.names = FALSE)
+```
+
+```{r}
+train_1 <- read_csv("train_1.csv")
+test_1 <- read_csv("test_1.csv")
+## Building a decision tree
+## Split 1
+train_1_tree <- rpart(classe~.,na.action = na.pass, data=train_1, method="class")
+
+printcp(train_1_tree)
+
+#Plot of the tree
+plot(train_1_tree)
+text(train_1_tree)
+
+#Predict using the test set
+split_1_predictions <- predict(train_1_tree,newdata = test_1)
+
+summary(split_1_predictions)
+```
+
+The cart model had a misclassification rate of over 70%. This is not ideal, so we will try a random forest model on the second split to get improved results.
+
+Split 2
+```{r}
+train_2 <- read_csv("train_2.csv")
+test_2 <- read_csv("test_2.csv")
+
+
+train_2 <- train_2 %>% 
+  select(-X)
+
+test_2 <- test_2 %>% 
+  select(-X)
+
+#Clustering the datset to reduce the number of rows and processing time
+
+#Using the first 300 clusters as this reduces the dimension of our data witout losing information.
+clusters <- hclust(dist(train_2))
+
+cut_cluster <- cutree(clusters,300)
+
+clusters_test <- hclust(dist(test_2))
+
+cut_cluster_test <- cutree(clusters_test,300)
+
+
+#Create a column that assigns each row to a cluster
+train_2$cluster <- as.factor(cut_cluster)
+test_2$cluster <- as.factor(cut_cluster_test)
+
+#Group by non-numeric variables and summarise numeric variables by their mean
+train_2 <- train_2 %>%
+  group_by(cluster,user_name,classe,cvtd_timestamp) %>% 
+  summarise_all(mean) 
+
+test_2 <- test_2 %>%
+  group_by(cluster,user_name,classe,cvtd_timestamp) %>% 
+  summarise_all(mean) 
+
+#Drop the cvtd_timestamp columns 
+train_2 <- train_2 %>% 
+  select(-c(cvtd_timestamp))
+
+test_2 <- test_2 %>% 
+  select(-c(cvtd_timestamp))
+
+#Build a random forest model to predict  the class variable
+train_2_rf <- train(classe~.,data=train_2,method="rf")
+
+#Predict on the test set using the random forest model
+train_2_predict <- predict(train_2_rf,test_2)
+
+#Out of sample error
+ confusionMatrix(as.factor(test_2$classe),as.factor(train_2_predict))
+ 
+#The out of sample error rate is approximately .05
+
+# This model has an accuracy of approximately 95% and will be the chosen model to ue on the validation set.
+
+# Running the model on the Validation data set to get the final predictions
+
+#We want a prediction for each of the observations so there is no need to cluster.
+final <- read_csv("pml-testing.csv",col_types = cols(.default="n",classe = "f", cvtd_timestamp = "f", user_name = "f", new_window = "f") )
+
+final <- final %>% 
+  select(-X1)
+
+#Create a dataframe that identifies na values with TRUE/FALSE
+na_check_final <- data.frame(apply(final, 2, is.na))
+
+#Select only the columns that have no na values
+na_check_final <- na_check_final %>% 
+  select_if(function(col) sum(col) == 0)
+
+#Use the column names (except Classe) from na_checktrain to select columns without na values 
+final <- final %>%
+  select(colnames(na_check_final))
+
+clusters_final <- hclust(dist(final))
+
+cut_cluster_final <- cutree(clusters_final,20)
+
+#Create a column that assigns each row to a cluster
+final$cluster <- as.factor(cut_cluster_final)
+
+final <- final %>%
+  select(cluster,user_name,cvtd_timestamp,everything(),-problem_id,-new_window)
+
+final$cluster <- as.factor(final$cluster)
+
+final_predictions <-  predict(train_2_rf,(final))
+
+#Print the predictions for the 20 test cases
+final_predictions
+```
+
+
+
+
