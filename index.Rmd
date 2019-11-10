@@ -13,7 +13,7 @@ knitr::opts_chunk$set(warning = FALSE,message=FALSE)
 
 
 
-```{r, echo = FALSE, results=FALSE, warning=FALSE,message=FALSE}
+```{r,results=FALSE, warning=FALSE,message=FALSE}
 #Import necessary libraries
 #For data manipulation
 library(tidyverse) 
@@ -27,8 +27,17 @@ library(lubridate)
 library(tree)
 #For classification trees
 library(rpart)
+#For rpart plots
+library(rpart.plot)
+library(rattle)
+library(RColorBrewer)
 ```
+Download the data
+```{r}
+urls <- c("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv","https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv")
 
+
+```
 
 Read in the datasets
 ```{r}
@@ -89,8 +98,7 @@ train_1_tree <- rpart(classe~.,na.action = na.pass, data=train_1, method="class"
 printcp(train_1_tree)
 
 #Plot of the tree
-plot(train_1_tree)
-text(train_1_tree)
+rattle::fancyRpartPlot(train_1_tree)
 
 #Predict using the test set
 split_1_predictions <- predict(train_1_tree,newdata = test_1)
@@ -137,12 +145,12 @@ test_2 <- test_2 %>%
   group_by(cluster,user_name,classe,cvtd_timestamp) %>% 
   summarise_all(mean) 
 
-#Drop the cvtd_timestamp columns 
+#Drop the new_window column due to missing values and cvtd_timestamp column as it is not relevant to the prediction
 train_2 <- train_2 %>% 
-  select(-c(cvtd_timestamp))
+  select(-c(new_window,cvtd_timestamp))
 
 test_2 <- test_2 %>% 
-  select(-c(cvtd_timestamp))
+  select(-c(new_window,cvtd_timestamp))
 
 #Build a random forest model to predict  the class variable
 train_2_rf <- train(classe~.,data=train_2,method="rf")
