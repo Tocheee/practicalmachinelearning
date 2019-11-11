@@ -1,6 +1,6 @@
 ---
 title: "Practical Machine Learning Prediction Exercise"
-author: "@tocheee.github.io"
+author: "Tochi Okeke"
 date: "November 9, 2019"
 output:
   html_document: default
@@ -10,8 +10,14 @@ output:
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(warning = FALSE,message=FALSE)
 ```
+INDEX.HTML (LINK TO HTML VERSION OF THE REPORT):
+https://tocheee.github.io/practicalmachinelearning/index.html
 
 
+Motivation:
+Using the data provided predict the manner in which an exercise was done.
+
+The data for this project come from this source: http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har.
 
 ```{r,results=FALSE, warning=FALSE,message=FALSE}
 #Import necessary libraries
@@ -32,10 +38,19 @@ library(rpart.plot)
 library(rattle)
 library(RColorBrewer)
 ```
+
+
+
+
 Download the data
 ```{r}
-urls <- c("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv","https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv")
+train_url <- c("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv")
 
+test_url <- c("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv")
+
+download.file(train_url,"pml-training.csv")
+
+download.file(test_url,"pml-testing.csv")
 
 ```
 
@@ -67,8 +82,8 @@ train_set <- train_set %>%
 write.csv(train_set,"train_set.csv")
 ```
 
+Cross - Validation
 ```{r}
-#Cross - Validation
 #Split the train data into 2 parts using caret to train different models without overfitting
 train_set <- read.csv("train_set.csv")
 
@@ -88,6 +103,7 @@ write.csv(test_1,"test_1.csv",row.names=FALSE)
 write.csv(test_2,"test_2.csv",row.names = FALSE)
 ```
 
+Modelling
 ```{r}
 train_1 <- read_csv("train_1.csv")
 test_1 <- read_csv("test_1.csv")
@@ -98,7 +114,7 @@ train_1_tree <- rpart(classe~.,na.action = na.pass, data=train_1, method="class"
 printcp(train_1_tree)
 
 #Plot of the tree
-rattle::fancyRpartPlot(train_1_tree)
+rattle::fancyRpartPlot(train_1_tree,main="Classification Tree Plot")
 
 #Predict using the test set
 split_1_predictions <- predict(train_1_tree,newdata = test_1)
@@ -201,7 +217,7 @@ final_predictions <-  predict(train_2_rf,(final))
 #Print the predictions for the 20 test cases
 final_predictions
 ```
-
+The predictions gave a score of 85% on the prediction quiz, hence an out of sample error rate of 15% 
 
 
 
